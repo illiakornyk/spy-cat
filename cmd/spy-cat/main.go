@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/illiakornyk/spy-cat/internal/config"
 	"github.com/illiakornyk/spy-cat/internal/storage/sqlite"
 )
@@ -27,22 +29,17 @@ func main() {
 
 
 
-	storage, err := sqlite.New(cfg.StoragePath)
+	_, err := sqlite.New(cfg.StoragePath)
     if err != nil {
 		log.Fatalf("Failed to open SQLite database: %v", err)
 	}
 
-    log.Println("SQLite database initialized successfully")
+	router := chi.NewRouter()
 
-    id, err := storage.SaveCat("Whiskers2", 5, "Siamese2", 1000.0)
-    if err != nil {
-        log.Fatalf("Failed to save cat: %v", err)
-    }
-
-	storage.DeleteCat(1)
-
-    log.Printf("Cat saved successfully with ID: %d", id)
-
+	router.Use(middleware.RequestID)
+	router.Use(middleware.Logger)
+	router.Use(middleware.Recoverer)
+	router.Use(middleware.URLFormat)
 }
 
 
