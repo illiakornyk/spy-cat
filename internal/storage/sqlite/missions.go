@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/illiakornyk/spy-cat/internal/common"
@@ -101,4 +102,87 @@ func (s *Storage) GetAllMissions() ([]common.Mission, error) {
     }
 
     return missions, nil
+}
+
+
+
+
+func (s *Storage) DeleteMission(id int64) error {
+	const op = "storage.sqlite.DeleteMission"
+
+	var catID int64
+	err := s.db.QueryRow("SELECT cat_id FROM missions WHERE id = ?", id).Scan(&catID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("%s: mission not found", op)
+		}
+		return fmt.Errorf("%s: query: %w", op, err)
+	}
+
+	if catID != 0 {
+		return fmt.Errorf("%s: cannot delete mission assigned to a cat", op)
+	}
+
+	stmt, err := s.db.Prepare("DELETE FROM targets WHERE mission_id = ?")
+	if err != nil {
+		return fmt.Errorf("%s: prepare delete targets statement: %w", op, err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(id)
+	if err != nil {
+		return fmt.Errorf("%s: execute delete targets statement: %w", op, err)
+	}
+
+	stmt, err = s.db.Prepare("DELETE FROM missions WHERE id = ?")
+	if err != nil {
+		return fmt.Errorf("%s: prepare delete mission statement: %w", op, err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(id)
+	if err != nil {
+		return fmt.Errorf("%s: execute delete mission statement: %w", op, err)
+	}
+
+	return nil
+}
+
+
+
+func (s *Storage) UpdateMissionCompleteStatus(id int64, complete bool) error {
+	const op = "storage.sqlite.UpdateMissionCompleteStatus"
+
+	var exists bool
+	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM missions WHERE id = ?)", id).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("%s: query row: %w", op, err)
+	}
+	if !exists {
+		return fmt.Errorf("%s: mission not found", op)
+	}
+
+	if complete {
+		var incompleteTargets int
+		err = s.db.QueryRow("SELECT COUNT(*) FROM targets WHERE mission_id = ? AND complete = 0", id).Scan(&incompleteTargets)
+		if err != nil {
+			return fmt.Errorf("%s: query incomplete targets: %w", op, err)
+		}
+		if incompleteTargets > 0 {
+			return fmt.Errorf("%s: cannot complete mission with incomplete targets", op)
+		}
+	}
+
+	stmt, err := s.db.Prepare("UPDATE missions SET complete = ? WHERE id = ?")
+	if err != nil {
+		return fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(complete, id)
+	if err != nil {
+		return fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	return nil
 }

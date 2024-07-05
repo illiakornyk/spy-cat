@@ -62,6 +62,7 @@ func main() {
 	router.Route("/api/v1/missions", func(r chi.Router) {
         r.Post("/", missions.CreateHandler(logger, storage))
         r.Get("/", missions.GetAllHandler(logger, storage))
+		r.Patch("/{id}", missions.UpdateCompleteStatusHandler(logger, storage))
     })
 
 	log.Printf("Starting server at %s...", cfg.HTTPServer.Address)
