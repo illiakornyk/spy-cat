@@ -9,7 +9,7 @@ import (
 	"log/slog"
 )
 
-type SpyCatGetter interface {
+type SpyCatsGetter interface {
     GetAllCats() ([]SpyCat, error)
 }
 
@@ -26,7 +26,7 @@ type GetAllResponse struct {
     Cats []SpyCat `json:"cats"`
 }
 
-func GetAllHandler(logger *slog.Logger, spyCatGetter SpyCatGetter) http.HandlerFunc {
+func GetAllHandler(logger *slog.Logger, spyCatGetter SpyCatsGetter) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         const op = "handlers.spycat.get_all"
 

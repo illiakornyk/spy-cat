@@ -178,6 +178,23 @@ func (s *Storage) GetAllCats() ([]spycat.SpyCat, error) {
     return cats, nil
 }
 
+func (s *Storage) GetCatByID(id int64) (*spycat.SpyCat, error) {
+    const op = "storage.sqlite.GetCatByID"
+
+    var cat spycat.SpyCat
+    err := s.db.QueryRow("SELECT id, name, years_of_experience, breed, salary FROM spy_cats WHERE id = ?", id).
+        Scan(&cat.ID, &cat.Name, &cat.YearsOfExperience, &cat.Breed, &cat.Salary)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, nil
+        }
+        return nil, fmt.Errorf("%s: query row: %w", op, err)
+    }
+
+    return &cat, nil
+}
+
+
 
 func isConstraintViolation(err error) bool {
     return strings.Contains(err.Error(), "UNIQUE constraint failed")
