@@ -29,7 +29,7 @@ type SpyCatCreator interface {
     CreateCat(name string, yearsOfExperience int, breed string, salary float64) (int64, error)
 }
 
-func New(logger *slog.Logger, spyCatCreator SpyCatCreator) http.HandlerFunc {
+func CreateHandler(logger *slog.Logger, spyCatCreator SpyCatCreator) http.HandlerFunc {
 	validate := validator.New()
 
     return func(w http.ResponseWriter, r *http.Request) {

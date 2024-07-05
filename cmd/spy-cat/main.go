@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
 	"github.com/illiakornyk/spy-cat/internal/breeds"
 	"github.com/illiakornyk/spy-cat/internal/config"
 	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/spycat"
@@ -48,12 +48,14 @@ func main() {
 	router.Use(mwLogger.New(logger))
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
-	router.Post("/api/v1/spy-cats", spycat.New(logger, storage))
+	router.Post("/api/v1/spy-cats", spycat.CreateHandler(logger, storage))
+	router.Delete("/api/v1/spy-cats/{id}", spycat.DeleteHandler(logger, storage))
 
 
-	if err := http.ListenAndServe(cfg.Address, router); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	   log.Printf("Starting server at %s...", cfg.HTTPServer.Address)
+    if err := http.ListenAndServe(cfg.HTTPServer.Address, router); err != nil {
+        log.Fatalf("Failed to start server: %v", err)
+    }
 }
 
 
