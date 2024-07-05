@@ -12,55 +12,51 @@ import (
 
 
 
-func (s *Storage) CreateMission(catID int64, targets []common.Target, complete bool) (int64, error) {
+func (s *Storage) CreateMission(catID sql.NullInt64, targets []common.Target, complete bool) (int64, error) {
 	const op = "storage.sqlite.CreateMission"
 
-	tx, err := s.db.Begin()
+	stmt, err := s.db.Prepare("INSERT INTO missions (cat_id, complete) VALUES (?, ?)")
 	if err != nil {
-		return 0, fmt.Errorf("%s: begin transaction: %w", op, err)
-	}
-
-	stmt, err := tx.Prepare("INSERT INTO missions (cat_id, complete) VALUES (?, ?)")
-	if err != nil {
-		tx.Rollback()
 		return 0, fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
 	defer stmt.Close()
 
 	res, err := stmt.Exec(catID, complete)
 	if err != nil {
-		tx.Rollback()
 		return 0, fmt.Errorf("%s: execute statement: %w", op, err)
 	}
 
 	missionID, err := res.LastInsertId()
 	if err != nil {
-		tx.Rollback()
-		return 0, fmt.Errorf("%s: last insert id: %w", op, err)
+		return 0, fmt.Errorf("%s: failed to get last insert id: %w", op, err)
 	}
 
 	for _, target := range targets {
-		targetStmt, err := tx.Prepare("INSERT INTO targets (mission_id, name, country, notes, complete) VALUES (?, ?, ?, ?, ?)")
+		_, err := s.AddTarget(missionID, target.Name, target.Country, target.Notes)
 		if err != nil {
-			tx.Rollback()
-			return 0, fmt.Errorf("%s: prepare target statement: %w", op, err)
+			return 0, fmt.Errorf("%s: failed to add target: %w", op, err)
 		}
-		defer targetStmt.Close()
-
-		_, err = targetStmt.Exec(missionID, target.Name, target.Country, target.Notes, target.Complete)
-		if err != nil {
-			tx.Rollback()
-			return 0, fmt.Errorf("%s: execute target statement: %w", op, err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("%s: commit transaction: %w", op, err)
 	}
 
 	return missionID, nil
 }
 
+func (s *Storage) AssignCatToMission(missionID, catID int64) error {
+	const op = "storage.sqlite.AssignCatToMission"
+
+	stmt, err := s.db.Prepare("UPDATE missions SET cat_id = ? WHERE id = ?")
+	if err != nil {
+		return fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(catID, missionID)
+	if err != nil {
+		return fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	return nil
+}
 
 func (s *Storage) GetAllMissions() ([]common.Mission, error) {
     const op = "storage.sqlite.GetAllMissions"
@@ -107,47 +103,34 @@ func (s *Storage) GetAllMissions() ([]common.Mission, error) {
 
 
 
-func (s *Storage) DeleteMission(id int64) error {
+func (s *Storage) DeleteMission(missionID int64) error {
 	const op = "storage.sqlite.DeleteMission"
 
-	var catID int64
-	err := s.db.QueryRow("SELECT cat_id FROM missions WHERE id = ?", id).Scan(&catID)
+	var catID sql.NullInt64
+	err := s.db.QueryRow("SELECT cat_id FROM missions WHERE id = ?", missionID).Scan(&catID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("%s: mission not found", op)
 		}
-		return fmt.Errorf("%s: query: %w", op, err)
+		return fmt.Errorf("%s: query mission: %w", op, err)
+	}
+	if catID.Valid {
+		return fmt.Errorf("%s: cannot delete a mission assigned to a cat", op)
 	}
 
-	if catID != 0 {
-		return fmt.Errorf("%s: cannot delete mission assigned to a cat", op)
-	}
-
-	stmt, err := s.db.Prepare("DELETE FROM targets WHERE mission_id = ?")
+	stmt, err := s.db.Prepare("DELETE FROM missions WHERE id = ?")
 	if err != nil {
-		return fmt.Errorf("%s: prepare delete targets statement: %w", op, err)
+		return fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(id)
+	_, err = stmt.Exec(missionID)
 	if err != nil {
-		return fmt.Errorf("%s: execute delete targets statement: %w", op, err)
-	}
-
-	stmt, err = s.db.Prepare("DELETE FROM missions WHERE id = ?")
-	if err != nil {
-		return fmt.Errorf("%s: prepare delete mission statement: %w", op, err)
-	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec(id)
-	if err != nil {
-		return fmt.Errorf("%s: execute delete mission statement: %w", op, err)
+		return fmt.Errorf("%s: execute statement: %w", op, err)
 	}
 
 	return nil
 }
-
 
 
 func (s *Storage) UpdateMissionCompleteStatus(id int64, complete bool) error {

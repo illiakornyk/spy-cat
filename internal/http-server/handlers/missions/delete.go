@@ -33,7 +33,6 @@ func DeleteHandler(logger *slog.Logger, missionDeleter MissionDeleter) http.Hand
 			return
 		}
 
-
 		exists, err := missionDeleter.MissionExists(id)
 		if err != nil {
 			logger.Error("failed to check if mission exists", slog.Any("error", err))

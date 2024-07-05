@@ -1,6 +1,7 @@
 package missions
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,11 +14,10 @@ import (
 )
 
 type CreateRequest struct {
-	CatID    int64    `json:"cat_id" validate:"required,min=1"`
+	CatID    *int64         `json:"cat_id,omitempty"` // Changed to pointer to make it optional
 	Targets  []common.Target `json:"targets" validate:"required,dive"`
-	Complete bool     `json:"complete"`
+	Complete bool           `json:"complete"`
 }
-
 
 type CreateResponse struct {
 	response.Response
@@ -25,7 +25,7 @@ type CreateResponse struct {
 }
 
 type MissionCreator interface {
-	CreateMission(catID int64, targets []common.Target, complete bool) (int64, error)
+	CreateMission(catID sql.NullInt64, targets []common.Target, complete bool) (int64, error)
 }
 
 func CreateHandler(logger *slog.Logger, missionCreator MissionCreator) http.HandlerFunc {
@@ -71,7 +71,14 @@ func CreateHandler(logger *slog.Logger, missionCreator MissionCreator) http.Hand
 			return
 		}
 
-		id, err := missionCreator.CreateMission(req.CatID, req.Targets, req.Complete)
+		var catID sql.NullInt64
+		if req.CatID != nil {
+			catID = sql.NullInt64{Int64: *req.CatID, Valid: true}
+		} else {
+			catID = sql.NullInt64{Valid: false}
+		}
+
+		id, err := missionCreator.CreateMission(catID, req.Targets, req.Complete)
 		if err != nil {
 			logger.Error("failed to create mission", slog.Any("error", err))
 
