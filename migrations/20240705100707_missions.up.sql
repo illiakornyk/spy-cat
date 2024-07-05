@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS missions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cat_id INTEGER,
+    complete BOOLEAN,
+    FOREIGN KEY (cat_id) REFERENCES cats(id)
+);

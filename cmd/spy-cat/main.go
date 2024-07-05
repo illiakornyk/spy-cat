@@ -1,10 +1,12 @@
 package main
 
 import (
+	"log"
 	"log/slog"
 	"os"
 
 	"github.com/illiakornyk/spy-cat/internal/config"
+	"github.com/illiakornyk/spy-cat/internal/storage/sqlite"
 )
 
 const (
@@ -17,11 +19,28 @@ const (
 func main() {
 	cfg := config.MustLoad()
 
-	log := setupLogger(cfg.Env)
-    log = log.With(slog.String("env", cfg.Env))
+	logger := setupLogger(cfg.Env)
+    logger = logger.With(slog.String("env", cfg.Env))
 
-    log.Info("initializing server", slog.String("address", cfg.Address))
-    log.Debug("logger debug mode enabled")
+    logger.Info("initializing server", slog.String("address", cfg.Address))
+    logger.Debug("logger debug mode enabled")
+
+
+
+	storage, err := sqlite.New(cfg.StoragePath)
+    if err != nil {
+		log.Fatalf("Failed to open SQLite database: %v", err)
+	}
+
+    log.Println("SQLite database initialized successfully")
+
+    id, err := storage.SaveCat("Whiskers", 5, "Siamese", 1000.0)
+    if err != nil {
+        log.Fatalf("Failed to save cat: %v", err)
+    }
+
+    log.Printf("Cat saved successfully with ID: %d", id)
+
 }
 
 
