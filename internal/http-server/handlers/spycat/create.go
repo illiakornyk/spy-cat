@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/illiakornyk/spy-cat/internal/breeds"
 	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
 )
 
@@ -70,6 +71,18 @@ func New(logger *slog.Logger, spyCatCreator SpyCatCreator) http.HandlerFunc {
             })
             return
         }
+
+		// Validate the breed
+        if !breeds.IsValidBreed(req.Breed) {
+            logger.Error("invalid breed", slog.String("breed", req.Breed))
+
+            json.NewEncoder(w).Encode(response.Response{
+                Status: response.StatusError,
+                Error:  "invalid breed",
+            })
+            return
+        }
+
 
         id, err := spyCatCreator.CreateCat(req.Name, req.YearsOfExperience, req.Breed, req.Salary)
         if err != nil {

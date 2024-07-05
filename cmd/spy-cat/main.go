@@ -5,9 +5,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/illiakornyk/spy-cat/internal/breeds"
 	"github.com/illiakornyk/spy-cat/internal/config"
 	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/spycat"
 	mwLogger "github.com/illiakornyk/spy-cat/internal/http-server/middleware/logger"
@@ -36,6 +38,8 @@ func main() {
     if err != nil {
 		log.Fatalf("Failed to open SQLite database: %v", err)
 	}
+
+	breeds.StartBreedCache(24*time.Hour)
 
 	router := chi.NewRouter()
 
