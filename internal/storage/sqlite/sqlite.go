@@ -61,7 +61,7 @@ func runMigrations(db *sql.DB) error {
     return nil
 }
 
-func (s *Storage) SaveCat(name string, yearsOfExperience int, breed string, salary float64) (int64, error) {
+func (s *Storage) CreateCat(name string, yearsOfExperience int, breed string, salary float64) (int64, error) {
     const op = "storage.sqlite.SaveCat"
 
     stmt, err := s.db.Prepare("INSERT INTO spy_cats (name, years_of_experience, breed, salary) VALUES (?, ?, ?, ?)")
