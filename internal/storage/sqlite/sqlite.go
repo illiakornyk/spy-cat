@@ -12,6 +12,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/spycat"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -150,6 +151,33 @@ func (s *Storage) CatExists(id int64) (bool, error) {
 
     return exists, nil
 }
+
+
+func (s *Storage) GetAllCats() ([]spycat.SpyCat, error) {
+    const op = "storage.sqlite.GetAllCats"
+
+    rows, err := s.db.Query("SELECT id, name, years_of_experience, breed, salary FROM spy_cats")
+    if err != nil {
+        return nil, fmt.Errorf("%s: query: %w", op, err)
+    }
+    defer rows.Close()
+
+    var cats []spycat.SpyCat
+    for rows.Next() {
+        var cat spycat.SpyCat
+        if err := rows.Scan(&cat.ID, &cat.Name, &cat.YearsOfExperience, &cat.Breed, &cat.Salary); err != nil {
+            return nil, fmt.Errorf("%s: scan: %w", op, err)
+        }
+        cats = append(cats, cat)
+    }
+
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf("%s: rows error: %w", op, err)
+    }
+
+    return cats, nil
+}
+
 
 func isConstraintViolation(err error) bool {
     return strings.Contains(err.Error(), "UNIQUE constraint failed")
