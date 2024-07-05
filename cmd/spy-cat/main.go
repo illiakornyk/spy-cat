@@ -3,11 +3,14 @@ package main
 import (
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/illiakornyk/spy-cat/internal/config"
+	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/spycat"
+	mwLogger "github.com/illiakornyk/spy-cat/internal/http-server/middleware/logger"
 	"github.com/illiakornyk/spy-cat/internal/storage/sqlite"
 )
 
@@ -29,7 +32,7 @@ func main() {
 
 
 
-	_, err := sqlite.New(cfg.StoragePath)
+	storage, err := sqlite.New(cfg.StoragePath)
     if err != nil {
 		log.Fatalf("Failed to open SQLite database: %v", err)
 	}
@@ -38,8 +41,15 @@ func main() {
 
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Logger)
+	router.Use(mwLogger.New(logger))
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
+	router.Post("/api/v1/spy-cats", spycat.New(logger, storage))
+
+
+	if err := http.ListenAndServe(cfg.Address, router); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }
 
 
