@@ -126,15 +126,29 @@ func (s *Storage) DeleteMission(missionID int64) error {
 		return fmt.Errorf("%s: cannot delete a mission assigned to a cat", op)
 	}
 
-	stmt, err := s.db.Prepare("DELETE FROM missions WHERE id = ?")
+	// Begin transaction
+	tx, err := s.db.Begin()
 	if err != nil {
-		return fmt.Errorf("%s: prepare statement: %w", op, err)
+		return fmt.Errorf("%s: begin transaction: %w", op, err)
 	}
-	defer stmt.Close()
 
-	_, err = stmt.Exec(missionID)
+	// Delete targets associated with the mission
+	_, err = tx.Exec("DELETE FROM targets WHERE mission_id = ?", missionID)
 	if err != nil {
-		return fmt.Errorf("%s: execute statement: %w", op, err)
+		tx.Rollback()
+		return fmt.Errorf("%s: delete targets: %w", op, err)
+	}
+
+	// Delete the mission
+	_, err = tx.Exec("DELETE FROM missions WHERE id = ?", missionID)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("%s: delete mission: %w", op, err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("%s: commit transaction: %w", op, err)
 	}
 
 	return nil

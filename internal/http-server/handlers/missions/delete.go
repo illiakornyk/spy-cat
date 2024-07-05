@@ -16,7 +16,7 @@ type MissionDeleter interface {
 }
 
 func DeleteHandler(logger *slog.Logger, missionDeleter MissionDeleter) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.missions.delete"
 
 		logger = logger.With(slog.String("op", op))
