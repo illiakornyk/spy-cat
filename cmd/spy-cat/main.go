@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/illiakornyk/spy-cat/internal/breeds"
 	"github.com/illiakornyk/spy-cat/internal/config"
+	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/missions"
 	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/spycat"
 	mwLogger "github.com/illiakornyk/spy-cat/internal/http-server/middleware/logger"
 	"github.com/illiakornyk/spy-cat/internal/storage/sqlite"
@@ -56,6 +57,11 @@ func main() {
         r.Delete("/{id}", spycat.DeleteHandler(logger, storage))
         r.Patch("/{id}", spycat.PatchHandler(logger, storage))
 		r.Get("/{id}", spycat.GetOneHandler(logger, storage))
+    })
+
+	router.Route("/api/v1/missions", func(r chi.Router) {
+        r.Post("/", missions.CreateHandler(logger, storage))
+        r.Get("/", missions.GetAllHandler(logger, storage))
     })
 
 	log.Printf("Starting server at %s...", cfg.HTTPServer.Address)
