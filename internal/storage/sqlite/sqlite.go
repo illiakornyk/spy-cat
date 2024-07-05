@@ -113,6 +113,44 @@ func (s *Storage) DeleteCat(id int64) error {
     return nil
 }
 
+func (s *Storage) UpdateCatSalary(id int64, salary float64) error {
+    const op = "storage.sqlite.UpdateCatSalary"
+
+    stmt, err := s.db.Prepare("UPDATE spy_cats SET salary = ? WHERE id = ?")
+    if err != nil {
+        return fmt.Errorf("%s: prepare statement: %w", op, err)
+    }
+    defer stmt.Close()
+
+    res, err := stmt.Exec(salary, id)
+    if err != nil {
+        return fmt.Errorf("%s: execute statement: %w", op, err)
+    }
+
+    rowsAffected, err := res.RowsAffected()
+    if err != nil {
+        return fmt.Errorf("%s: get rows affected: %w", op, err)
+    }
+
+    if rowsAffected == 0 {
+        return fmt.Errorf("%s: no cat found with id %d", op, id)
+    }
+
+    return nil
+}
+
+func (s *Storage) CatExists(id int64) (bool, error) {
+    const op = "storage.sqlite.CatExists"
+
+    var exists bool
+    err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM spy_cats WHERE id = ?)", id).Scan(&exists)
+    if err != nil {
+        return false, fmt.Errorf("%s: query row: %w", op, err)
+    }
+
+    return exists, nil
+}
+
 func isConstraintViolation(err error) bool {
     return strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

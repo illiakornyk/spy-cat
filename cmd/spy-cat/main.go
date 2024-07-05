@@ -48,12 +48,17 @@ func main() {
 	router.Use(mwLogger.New(logger))
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
-	router.Post("/api/v1/spy-cats", spycat.CreateHandler(logger, storage))
-	router.Delete("/api/v1/spy-cats/{id}", spycat.DeleteHandler(logger, storage))
 
 
-	   log.Printf("Starting server at %s...", cfg.HTTPServer.Address)
-    if err := http.ListenAndServe(cfg.HTTPServer.Address, router); err != nil {
+    router.Route("/api/v1/spy-cats", func(r chi.Router) {
+        r.Post("/", spycat.CreateHandler(logger, storage))
+        r.Delete("/{id}", spycat.DeleteHandler(logger, storage))
+        r.Patch("/{id}", spycat.PatchHandler(logger, storage))
+    })
+
+	log.Printf("Starting server at %s...", cfg.HTTPServer.Address)
+
+	if err := http.ListenAndServe(cfg.HTTPServer.Address, router); err != nil {
         log.Fatalf("Failed to start server: %v", err)
     }
 }

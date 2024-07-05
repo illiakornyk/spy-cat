@@ -5,30 +5,37 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
-
 	"log/slog"
 
+	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
+
 	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
 )
 
-type SpyCatDeleter interface {
-    DeleteCat(id int64) error
+type SpyCatUpdater interface {
+    UpdateCatSalary(id int64, salary float64) error
 	CatExists(id int64) (bool, error)
 }
 
-type DeleteResponse struct {
+type PatchRequest struct {
+    Salary float64 `json:"salary" validate:"required,gt=0"`
+}
+
+type PatchResponse struct {
     response.Response
 }
 
-func DeleteHandler(logger *slog.Logger, spyCatDeleter SpyCatDeleter) http.HandlerFunc {
+func PatchHandler(logger *slog.Logger, spyCatUpdater SpyCatUpdater) http.HandlerFunc {
+    validate := validator.New()
+
     return func(w http.ResponseWriter, r *http.Request) {
-        const op = "handlers.spycat.delete"
+        const op = "handlers.spycat.patch"
 
         logger = logger.With(slog.String("op", op))
 
         idStr := chi.URLParam(r, "id")
-		        logger.Info("Extracted ID from URL", slog.String("idStr", idStr)) // Add log
+        logger.Info("Extracted ID from URL", slog.String("idStr", idStr))
 
         if idStr == "" {
             logger.Error("id path parameter is missing")
@@ -51,7 +58,7 @@ func DeleteHandler(logger *slog.Logger, spyCatDeleter SpyCatDeleter) http.Handle
             return
         }
 
-        exists, err := spyCatDeleter.CatExists(id)
+        exists, err := spyCatUpdater.CatExists(id)
         if err != nil {
             logger.Error("failed to check if cat exists", slog.Any("error", err))
 
@@ -62,7 +69,7 @@ func DeleteHandler(logger *slog.Logger, spyCatDeleter SpyCatDeleter) http.Handle
             return
         }
 
-		if !exists {
+        if !exists {
             logger.Error("cat not found", slog.Int64("id", id))
 
             json.NewEncoder(w).Encode(response.Response{
@@ -72,20 +79,44 @@ func DeleteHandler(logger *slog.Logger, spyCatDeleter SpyCatDeleter) http.Handle
             return
         }
 
-        err = spyCatDeleter.DeleteCat(id)
+
+        var req PatchRequest
+        err = json.NewDecoder(r.Body).Decode(&req)
         if err != nil {
-            logger.Error("failed to delete spy cat", slog.Any("error", err))
+            logger.Error("failed to decode request body", slog.Any("error", err))
 
             json.NewEncoder(w).Encode(response.Response{
                 Status: response.StatusError,
-                Error:  "failed to delete spy cat",
+                Error:  "failed to decode request body",
             })
             return
         }
 
-        logger.Info("spy cat deleted successfully", slog.Int64("id", id))
+        err = validate.Struct(req)
+        if err != nil {
+            logger.Error("validation failed", slog.Any("error", err))
 
-        json.NewEncoder(w).Encode(DeleteResponse{
+            json.NewEncoder(w).Encode(response.Response{
+                Status: response.StatusError,
+                Error:  "validation failed",
+            })
+            return
+        }
+
+        err = spyCatUpdater.UpdateCatSalary(id, req.Salary)
+        if err != nil {
+            logger.Error("failed to update spy cat salary", slog.Any("error", err))
+
+            json.NewEncoder(w).Encode(response.Response{
+                Status: response.StatusError,
+                Error:  "failed to update spy cat salary",
+            })
+            return
+        }
+
+        logger.Info("spy cat salary updated successfully", slog.Int64("id", id), slog.Float64("salary", req.Salary))
+
+        json.NewEncoder(w).Encode(PatchResponse{
             Response: response.Response{
                 Status: response.StatusOK,
             },
