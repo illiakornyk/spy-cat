@@ -41,9 +41,48 @@ func (s *Storage) CreateMission(catID sql.NullInt64, targets []common.Target, co
 	return missionID, nil
 }
 
+
+
+func (s *Storage) UpdateMissionCompleteStatus(id int64, complete bool) error {
+	const op = "storage.sqlite.UpdateMissionCompleteStatus"
+
+	stmt, err := s.db.Prepare("UPDATE missions SET complete = ? WHERE id = ?")
+	if err != nil {
+		return fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(complete, id)
+	if err != nil {
+		return fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	return nil
+}
+
 func (s *Storage) AssignCatToMission(missionID, catID int64) error {
 	const op = "storage.sqlite.AssignCatToMission"
 
+	// Check if the mission exists
+	var exists bool
+	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM missions WHERE id = ?)", missionID).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("%s: query mission: %w", op, err)
+	}
+	if !exists {
+		return fmt.Errorf("%s: mission does not exist", op)
+	}
+
+	// Check if the cat exists
+	err = s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM spy_cats WHERE id = ?)", catID).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("%s: query cat: %w", op, err)
+	}
+	if !exists {
+		return fmt.Errorf("%s: cat does not exist", op)
+	}
+
+	// Assign the cat to the mission
 	stmt, err := s.db.Prepare("UPDATE missions SET cat_id = ? WHERE id = ?")
 	if err != nil {
 		return fmt.Errorf("%s: prepare statement: %w", op, err)
@@ -56,6 +95,18 @@ func (s *Storage) AssignCatToMission(missionID, catID int64) error {
 	}
 
 	return nil
+}
+
+func (s *Storage) MissionExists(id int64) (bool, error) {
+	const op = "storage.sqlite.MissionExists"
+
+	var exists bool
+	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM missions WHERE id = ?)", id).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("%s: query mission: %w", op, err)
+	}
+
+	return exists, nil
 }
 
 func (s *Storage) GetAllMissions() ([]common.Mission, error) {
@@ -130,55 +181,4 @@ func (s *Storage) DeleteMission(missionID int64) error {
 	}
 
 	return nil
-}
-
-
-func (s *Storage) UpdateMissionCompleteStatus(id int64, complete bool) error {
-	const op = "storage.sqlite.UpdateMissionCompleteStatus"
-
-	var exists bool
-	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM missions WHERE id = ?)", id).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("%s: query row: %w", op, err)
-	}
-	if !exists {
-		return fmt.Errorf("%s: mission not found", op)
-	}
-
-	if complete {
-		var incompleteTargets int
-		err = s.db.QueryRow("SELECT COUNT(*) FROM targets WHERE mission_id = ? AND complete = 0", id).Scan(&incompleteTargets)
-		if err != nil {
-			return fmt.Errorf("%s: query incomplete targets: %w", op, err)
-		}
-		if incompleteTargets > 0 {
-			return fmt.Errorf("%s: cannot complete mission with incomplete targets", op)
-		}
-	}
-
-	stmt, err := s.db.Prepare("UPDATE missions SET complete = ? WHERE id = ?")
-	if err != nil {
-		return fmt.Errorf("%s: prepare statement: %w", op, err)
-	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec(complete, id)
-	if err != nil {
-		return fmt.Errorf("%s: execute statement: %w", op, err)
-	}
-
-	return nil
-}
-
-
-func (s *Storage) MissionExists(missionID int64) (bool, error) {
-	const op = "storage.sqlite.MissionExists"
-
-	var exists bool
-	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM missions WHERE id = ?)", missionID).Scan(&exists)
-	if err != nil {
-		return false, fmt.Errorf("%s: query row: %w", op, err)
-	}
-
-	return exists, nil
 }

@@ -63,7 +63,9 @@ func main() {
 	router.Route("/api/v1/missions", func(r chi.Router) {
         r.Post("/", missions.CreateHandler(logger, storage))
         r.Get("/", missions.GetAllHandler(logger, storage))
-		r.Patch("/{id}", missions.UpdateCompleteStatusHandler(logger, storage))
+		r.Patch("/{id}", missions.UpdateHandler(logger, storage))
+
+		r.Delete("/{id}", missions.DeleteHandler(logger, storage))
 
 		// Target routes
         r.Route("/{missionID}/targets", func(r chi.Router) {
