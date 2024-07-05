@@ -34,10 +34,12 @@ func main() {
 
     log.Println("SQLite database initialized successfully")
 
-    id, err := storage.SaveCat("Whiskers", 5, "Siamese", 1000.0)
+    id, err := storage.SaveCat("Whiskers2", 5, "Siamese2", 1000.0)
     if err != nil {
         log.Fatalf("Failed to save cat: %v", err)
     }
+
+	storage.DeleteCat(1)
 
     log.Printf("Cat saved successfully with ID: %d", id)
 

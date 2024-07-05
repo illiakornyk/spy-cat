@@ -86,6 +86,33 @@ func (s *Storage) SaveCat(name string, yearsOfExperience int, breed string, sala
     return id, nil
 }
 
+
+func (s *Storage) DeleteCat(id int64) error {
+    const op = "storage.sqlite.DeleteCat"
+
+    stmt, err := s.db.Prepare("DELETE FROM spy_cats WHERE id = ?")
+    if err != nil {
+        return fmt.Errorf("%s: prepare statement: %w", op, err)
+    }
+    defer stmt.Close()
+
+    res, err := stmt.Exec(id)
+    if err != nil {
+        return fmt.Errorf("%s: execute statement: %w", op, err)
+    }
+
+    rowsAffected, err := res.RowsAffected()
+    if err != nil {
+        return fmt.Errorf("%s: get rows affected: %w", op, err)
+    }
+
+    if rowsAffected == 0 {
+        return fmt.Errorf("%s: no cat found with id %d", op, id)
+    }
+
+    return nil
+}
+
 func isConstraintViolation(err error) bool {
     return strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
