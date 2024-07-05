@@ -116,6 +116,8 @@ func PatchHandler(logger *slog.Logger, spyCatUpdater SpyCatUpdater) http.Handler
 
         logger.Info("spy cat salary updated successfully", slog.Int64("id", id), slog.Float64("salary", req.Salary))
 
+		w.Header().Set("Content-Type", "application/json")
+
         json.NewEncoder(w).Encode(PatchResponse{
             Response: response.Response{
                 Status: response.StatusOK,

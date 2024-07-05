@@ -19,7 +19,6 @@ type SpyCatGetter interface {
 }
 
 type GetOneResponse struct {
-    response.Response
     Cat *SpyCat `json:"cat,omitempty"`
 }
 
@@ -97,11 +96,9 @@ func GetOneHandler(logger *slog.Logger, spyCatGetter SpyCatGetter) http.HandlerF
 
         logger.Info("retrieved spy cat successfully", slog.Int64("id", id))
 
-        json.NewEncoder(w).Encode(GetOneResponse{
-            Response: response.Response{
-                Status: response.StatusOK,
-            },
-            Cat: cat,
-        })
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(GetOneResponse{
+			Cat: cat,
+		})
     }
 }

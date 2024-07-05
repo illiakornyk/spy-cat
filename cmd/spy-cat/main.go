@@ -51,9 +51,11 @@ func main() {
 
 
     router.Route("/api/v1/spy-cats", func(r chi.Router) {
+		r.Get("/", spycat.GetAllHandler(logger, storage))
         r.Post("/", spycat.CreateHandler(logger, storage))
         r.Delete("/{id}", spycat.DeleteHandler(logger, storage))
         r.Patch("/{id}", spycat.PatchHandler(logger, storage))
+		r.Get("/{id}", spycat.GetOneHandler(logger, storage))
     })
 
 	log.Printf("Starting server at %s...", cfg.HTTPServer.Address)

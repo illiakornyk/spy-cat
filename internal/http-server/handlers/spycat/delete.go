@@ -85,6 +85,7 @@ func DeleteHandler(logger *slog.Logger, spyCatDeleter SpyCatDeleter) http.Handle
 
         logger.Info("spy cat deleted successfully", slog.Int64("id", id))
 
+		w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(DeleteResponse{
             Response: response.Response{
                 Status: response.StatusOK,

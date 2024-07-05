@@ -44,6 +44,7 @@ func GetAllHandler(logger *slog.Logger, spyCatGetter SpyCatsGetter) http.Handler
         }
 
         logger.Info("retrieved all spy cats successfully", slog.Int("count", len(cats)))
+		w.Header().Set("Content-Type", "application/json")
 
         json.NewEncoder(w).Encode(GetAllResponse{
             Response: response.Response{

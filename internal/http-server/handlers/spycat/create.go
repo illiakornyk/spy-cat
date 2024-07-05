@@ -97,6 +97,7 @@ func CreateHandler(logger *slog.Logger, spyCatCreator SpyCatCreator) http.Handle
 
         logger.Info("spy cat created successfully", slog.Int64("id", id))
 
+		w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(CreateResponse{
             Response: response.Response{
                 Status: response.StatusOK,
