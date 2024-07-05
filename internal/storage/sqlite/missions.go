@@ -186,3 +186,16 @@ func (s *Storage) UpdateMissionCompleteStatus(id int64, complete bool) error {
 
 	return nil
 }
+
+
+func (s *Storage) MissionExists(missionID int64) (bool, error) {
+	const op = "storage.sqlite.MissionExists"
+
+	var exists bool
+	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM missions WHERE id = ?)", missionID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("%s: query row: %w", op, err)
+	}
+
+	return exists, nil
+}

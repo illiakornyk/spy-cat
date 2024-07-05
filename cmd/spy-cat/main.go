@@ -12,6 +12,7 @@ import (
 	"github.com/illiakornyk/spy-cat/internal/breeds"
 	"github.com/illiakornyk/spy-cat/internal/config"
 	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/missions"
+	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/missions/targets"
 	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/spycat"
 	mwLogger "github.com/illiakornyk/spy-cat/internal/http-server/middleware/logger"
 	"github.com/illiakornyk/spy-cat/internal/storage/sqlite"
@@ -63,7 +64,14 @@ func main() {
         r.Post("/", missions.CreateHandler(logger, storage))
         r.Get("/", missions.GetAllHandler(logger, storage))
 		r.Patch("/{id}", missions.UpdateCompleteStatusHandler(logger, storage))
-    })
+
+		// Target routes
+        r.Route("/{missionID}/targets", func(r chi.Router) {
+			r.Patch("/{targetID}", targets.UpdateTargetHandler(logger, storage))
+		})
+
+	})
+
 
 	log.Printf("Starting server at %s...", cfg.HTTPServer.Address)
 

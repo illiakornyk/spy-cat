@@ -12,6 +12,7 @@ import (
 
 type MissionDeleter interface {
 	DeleteMission(id int64) error
+	MissionExists(missionID int64) (bool, error)
 }
 
 func DeleteHandler(logger *slog.Logger, missionDeleter MissionDeleter) http.HandlerFunc {
@@ -28,6 +29,27 @@ func DeleteHandler(logger *slog.Logger, missionDeleter MissionDeleter) http.Hand
 			json.NewEncoder(w).Encode(response.Response{
 				Status: response.StatusError,
 				Error:  "invalid mission id",
+			})
+			return
+		}
+
+
+		exists, err := missionDeleter.MissionExists(id)
+		if err != nil {
+			logger.Error("failed to check if mission exists", slog.Any("error", err))
+
+			json.NewEncoder(w).Encode(response.Response{
+				Status: response.StatusError,
+				Error:  "failed to check if mission exists",
+			})
+			return
+		}
+		if !exists {
+			logger.Error("mission does not exist", slog.Int64("missionID", id))
+
+			json.NewEncoder(w).Encode(response.Response{
+				Status: response.StatusError,
+				Error:  "mission does not exist",
 			})
 			return
 		}

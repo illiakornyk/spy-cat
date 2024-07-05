@@ -16,6 +16,7 @@ type UpdateCompleteStatusRequest struct {
 
 type MissionCompleter interface {
 	UpdateMissionCompleteStatus(id int64, complete bool) error
+	MissionExists(missionID int64) (bool, error)
 }
 
 func UpdateCompleteStatusHandler(logger *slog.Logger, missionCompleter MissionCompleter) http.HandlerFunc {
@@ -35,6 +36,28 @@ func UpdateCompleteStatusHandler(logger *slog.Logger, missionCompleter MissionCo
 			})
 			return
 		}
+
+		exists, err := missionCompleter.MissionExists(id)
+		if err != nil {
+			logger.Error("failed to check if mission exists", slog.Any("error", err))
+
+			json.NewEncoder(w).Encode(response.Response{
+				Status: response.StatusError,
+				Error:  "failed to check if mission exists",
+			})
+			return
+		}
+		if !exists {
+			logger.Error("mission does not exist", slog.Int64("missionID", id))
+
+			json.NewEncoder(w).Encode(response.Response{
+				Status: response.StatusError,
+				Error:  "mission does not exist",
+			})
+			return
+		}
+
+
 
 		var req UpdateCompleteStatusRequest
 		err = json.NewDecoder(r.Body).Decode(&req)
