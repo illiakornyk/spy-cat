@@ -127,3 +127,38 @@ func (s *Storage) DeleteTarget(targetID int64) error {
 
 	return nil
 }
+
+
+func (s *Storage) AddTarget(missionID int64, name, country, notes string) (int64, error) {
+	const op = "storage.sqlite.AddTarget"
+
+	var complete bool
+	err := s.db.QueryRow("SELECT complete FROM missions WHERE id = ?", missionID).Scan(&complete)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, fmt.Errorf("%s: mission not found", op)
+		}
+		return 0, fmt.Errorf("%s: query mission: %w", op, err)
+	}
+	if complete {
+		return 0, fmt.Errorf("%s: cannot add target to a completed mission", op)
+	}
+
+	stmt, err := s.db.Prepare("INSERT INTO targets (mission_id, name, country, notes, complete) VALUES (?, ?, ?, ?, 0)")
+	if err != nil {
+		return 0, fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+	defer stmt.Close()
+
+	res, err := stmt.Exec(missionID, name, country, notes)
+	if err != nil {
+		return 0, fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	targetID, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to get last insert id: %w", op, err)
+	}
+
+	return targetID, nil
+}
