@@ -3,9 +3,16 @@ package main
 import (
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
+	"time"
 
+	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	"github.com/illiakornyk/spy-cat/internal/breeds"
 	"github.com/illiakornyk/spy-cat/internal/config"
+	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/spycat"
+	mwLogger "github.com/illiakornyk/spy-cat/internal/http-server/middleware/logger"
 	"github.com/illiakornyk/spy-cat/internal/storage/sqlite"
 )
 
@@ -32,17 +39,30 @@ func main() {
 		log.Fatalf("Failed to open SQLite database: %v", err)
 	}
 
-    log.Println("SQLite database initialized successfully")
+	breeds.StartBreedCache(24*time.Hour)
 
-    id, err := storage.SaveCat("Whiskers2", 5, "Siamese2", 1000.0)
-    if err != nil {
-        log.Fatalf("Failed to save cat: %v", err)
+	router := chi.NewRouter()
+
+	router.Use(middleware.RequestID)
+	router.Use(middleware.Logger)
+	router.Use(mwLogger.New(logger))
+	router.Use(middleware.Recoverer)
+	router.Use(middleware.URLFormat)
+
+
+    router.Route("/api/v1/spy-cats", func(r chi.Router) {
+		r.Get("/", spycat.GetAllHandler(logger, storage))
+        r.Post("/", spycat.CreateHandler(logger, storage))
+        r.Delete("/{id}", spycat.DeleteHandler(logger, storage))
+        r.Patch("/{id}", spycat.PatchHandler(logger, storage))
+		r.Get("/{id}", spycat.GetOneHandler(logger, storage))
+    })
+
+	log.Printf("Starting server at %s...", cfg.HTTPServer.Address)
+
+	if err := http.ListenAndServe(cfg.HTTPServer.Address, router); err != nil {
+        log.Fatalf("Failed to start server: %v", err)
     }
-
-	storage.DeleteCat(1)
-
-    log.Printf("Cat saved successfully with ID: %d", id)
-
 }
 
 
