@@ -68,6 +68,7 @@ func main() {
 		// Target routes
         r.Route("/{missionID}/targets", func(r chi.Router) {
 			r.Patch("/{targetID}", targets.UpdateTargetHandler(logger, storage))
+			r.Delete("/{targetID}", targets.DeleteTargetHandler(logger, storage))
 		})
 
 	})

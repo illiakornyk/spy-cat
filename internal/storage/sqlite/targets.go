@@ -96,3 +96,34 @@ func (s *Storage) TargetExists(targetID int64) (bool, error) {
 
 	return exists, nil
 }
+
+
+
+func (s *Storage) DeleteTarget(targetID int64) error {
+	const op = "storage.sqlite.DeleteTarget"
+
+	var complete bool
+	err := s.db.QueryRow("SELECT complete FROM targets WHERE id = ?", targetID).Scan(&complete)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("%s: target not found", op)
+		}
+		return fmt.Errorf("%s: query target: %w", op, err)
+	}
+	if complete {
+		return fmt.Errorf("%s: cannot delete a completed target", op)
+	}
+
+	stmt, err := s.db.Prepare("DELETE FROM targets WHERE id = ?")
+	if err != nil {
+		return fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(targetID)
+	if err != nil {
+		return fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	return nil
+}
