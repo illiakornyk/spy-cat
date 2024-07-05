@@ -9,42 +9,30 @@ import (
 	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
 )
 
-type GetAllResponse struct {
-	response.Response
-	Missions []common.Mission `json:"missions"`
-}
-
-
-
-type MissionGetter interface {
+type MissionLister interface {
 	GetAllMissions() ([]common.Mission, error)
 }
 
-func GetAllHandler(logger *slog.Logger, missionGetter MissionGetter) http.HandlerFunc {
+func GetAllHandler(logger *slog.Logger, missionLister MissionLister) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		const op = "handlers.missions.get_all"
+		const op = "handlers.missions.list"
 
 		logger = logger.With(slog.String("op", op))
 
-		missions, err := missionGetter.GetAllMissions()
+		missions, err := missionLister.GetAllMissions()
 		if err != nil {
-			logger.Error("failed to get all missions", slog.Any("error", err))
+			logger.Error("failed to list missions", slog.Any("error", err))
 
 			json.NewEncoder(w).Encode(response.Response{
 				Status: response.StatusError,
-				Error:  "failed to get all missions",
+				Error:  "failed to list missions",
 			})
 			return
 		}
 
-		logger.Info("retrieved all missions successfully", slog.Int("count", len(missions)))
+		logger.Info("missions listed successfully", slog.Int("count", len(missions)))
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(GetAllResponse{
-			Response: response.Response{
-				Status: response.StatusOK,
-			},
-			Missions: missions,
-		})
+		json.NewEncoder(w).Encode(missions)
 	}
 }

@@ -109,6 +109,40 @@ func (s *Storage) MissionExists(id int64) (bool, error) {
 	return exists, nil
 }
 
+
+
+func (s *Storage) DeleteMission(missionID int64) error {
+	const op = "storage.sqlite.DeleteMission"
+
+	var catID sql.NullInt64
+	err := s.db.QueryRow("SELECT cat_id FROM missions WHERE id = ?", missionID).Scan(&catID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("%s: mission not found", op)
+		}
+		return fmt.Errorf("%s: query mission: %w", op, err)
+	}
+	if catID.Valid {
+		return fmt.Errorf("%s: cannot delete a mission assigned to a cat", op)
+	}
+
+	stmt, err := s.db.Prepare("DELETE FROM missions WHERE id = ?")
+	if err != nil {
+		return fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(missionID)
+	if err != nil {
+		return fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	return nil
+}
+
+
+
+
 func (s *Storage) GetAllMissions() ([]common.Mission, error) {
     const op = "storage.sqlite.GetAllMissions"
 
@@ -151,34 +185,37 @@ func (s *Storage) GetAllMissions() ([]common.Mission, error) {
     return missions, nil
 }
 
+func (s *Storage) GetMission(id int64) (*common.Mission, error) {
+const op = "storage.sqlite.GetMissionWithTargets"
 
-
-
-func (s *Storage) DeleteMission(missionID int64) error {
-	const op = "storage.sqlite.DeleteMission"
-
-	var catID sql.NullInt64
-	err := s.db.QueryRow("SELECT cat_id FROM missions WHERE id = ?", missionID).Scan(&catID)
+	var mission common.Mission
+	err := s.db.QueryRow("SELECT id, cat_id, complete FROM missions WHERE id = ?", id).
+		Scan(&mission.ID, &mission.CatID, &mission.Complete)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return fmt.Errorf("%s: mission not found", op)
+			return nil, nil
 		}
-		return fmt.Errorf("%s: query mission: %w", op, err)
-	}
-	if catID.Valid {
-		return fmt.Errorf("%s: cannot delete a mission assigned to a cat", op)
+		return nil, fmt.Errorf("%s: query row: %w", op, err)
 	}
 
-	stmt, err := s.db.Prepare("DELETE FROM missions WHERE id = ?")
+	rows, err := s.db.Query("SELECT id, name, country, notes, complete FROM targets WHERE mission_id = ?", id)
 	if err != nil {
-		return fmt.Errorf("%s: prepare statement: %w", op, err)
+		return nil, fmt.Errorf("%s: query targets: %w", op, err)
 	}
-	defer stmt.Close()
+	defer rows.Close()
 
-	_, err = stmt.Exec(missionID)
-	if err != nil {
-		return fmt.Errorf("%s: execute statement: %w", op, err)
+	for rows.Next() {
+		var target common.Target
+		err := rows.Scan(&target.ID, &target.Name, &target.Country, &target.Notes, &target.Complete)
+		if err != nil {
+			return nil, fmt.Errorf("%s: scan target: %w", op, err)
+		}
+		mission.Targets = append(mission.Targets, target)
 	}
 
-	return nil
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%s: rows error: %w", op, err)
+	}
+
+	return &mission, nil
 }
