@@ -2,25 +2,21 @@ package missions
 
 import (
 	"database/sql"
-	"encoding/json"
-	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/illiakornyk/spy-cat/internal/common"
-	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
+	"github.com/illiakornyk/spy-cat/internal/utils"
 )
 
 type CreateRequest struct {
-	CatID    *int64         `json:"cat_id,omitempty"` // Changed to pointer to make it optional
+	CatID    *int64         `json:"cat_id,omitempty"`
 	Targets  []common.Target `json:"targets" validate:"required,dive"`
 	Complete bool           `json:"complete"`
 }
 
 type CreateResponse struct {
-	response.Response
 	ID int64 `json:"id,omitempty"`
 }
 
@@ -33,28 +29,14 @@ func CreateHandler(logger *slog.Logger, missionCreator MissionCreator) http.Hand
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.missions.create"
-
 		logger = logger.With(slog.String("op", op))
 
 		var req CreateRequest
 
-		err := json.NewDecoder(r.Body).Decode(&req)
-		if errors.Is(err, io.EOF) {
-			logger.Error("request body is empty")
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "empty request",
-			})
-			return
-		}
+		err := utils.ParseJSON(r, &req)
 		if err != nil {
 			logger.Error("failed to decode request body", slog.Any("error", err))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "failed to decode request",
-			})
+			utils.WriteError(w, http.StatusBadRequest, err)
 			return
 		}
 
@@ -63,11 +45,7 @@ func CreateHandler(logger *slog.Logger, missionCreator MissionCreator) http.Hand
 		err = validate.Struct(req)
 		if err != nil {
 			logger.Error("validation failed", slog.Any("error", err))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "validation failed",
-			})
+			utils.WriteError(w, http.StatusBadRequest, err)
 			return
 		}
 
@@ -81,22 +59,12 @@ func CreateHandler(logger *slog.Logger, missionCreator MissionCreator) http.Hand
 		id, err := missionCreator.CreateMission(catID, req.Targets, req.Complete)
 		if err != nil {
 			logger.Error("failed to create mission", slog.Any("error", err))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "failed to create mission",
-			})
+			utils.WriteError(w, http.StatusInternalServerError, err)
 			return
 		}
 
 		logger.Info("mission created successfully", slog.Int64("id", id))
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(CreateResponse{
-			Response: response.Response{
-				Status: response.StatusOK,
-			},
-			ID: id,
-		})
+		utils.WriteJSON(w, http.StatusCreated, CreateResponse{ID: id})
 	}
 }

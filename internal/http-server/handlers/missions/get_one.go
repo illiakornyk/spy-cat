@@ -1,14 +1,14 @@
 package missions
 
 import (
-	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/illiakornyk/spy-cat/internal/common"
-	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
+	"github.com/illiakornyk/spy-cat/internal/utils"
 )
 
 type MissionGetter interface {
@@ -25,37 +25,24 @@ func GetOneHandler(logger *slog.Logger, missionGetter MissionGetter) http.Handle
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
 			logger.Error("invalid mission id", slog.Any("error", err))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "invalid mission id",
-			})
+			utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid mission id"))
 			return
 		}
 
 		mission, err := missionGetter.GetMission(id)
 		if err != nil {
 			logger.Error("failed to get mission", slog.Any("error", err))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "failed to get mission",
-			})
+			utils.WriteError(w, http.StatusInternalServerError, fmt.Errorf("failed to get mission"))
 			return
 		}
 		if mission == nil {
 			logger.Error("mission not found", slog.Int64("missionID", id))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "mission not found",
-			})
+			utils.WriteError(w, http.StatusNotFound, fmt.Errorf("mission not found"))
 			return
 		}
 
 		logger.Info("mission retrieved successfully", slog.Int64("missionID", id))
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mission)
+		utils.WriteJSON(w, http.StatusOK, mission)
 	}
 }
