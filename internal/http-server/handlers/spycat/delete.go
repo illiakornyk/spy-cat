@@ -1,11 +1,11 @@
 package spycat
 
 import (
-	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
+	"github.com/illiakornyk/spy-cat/internal/utils"
 
 	"log/slog"
 
@@ -15,10 +15,6 @@ import (
 type SpyCatDeleter interface {
     DeleteCat(id int64) error
 	CatExists(id int64) (bool, error)
-}
-
-type DeleteResponse struct {
-    response.Response
 }
 
 func DeleteHandler(logger *slog.Logger, spyCatDeleter SpyCatDeleter) http.HandlerFunc {
@@ -32,70 +28,38 @@ func DeleteHandler(logger *slog.Logger, spyCatDeleter SpyCatDeleter) http.Handle
 
 		if idStr == "" {
 			logger.Error("id path parameter is missing")
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "id path parameter is missing",
-			})
+			utils.WriteError(w, http.StatusBadRequest, errors.New("id path parameter is missing"))
 			return
 		}
 
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil || id < 1 {
 			logger.Error("invalid id path parameter", slog.Any("error", err))
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "invalid id path parameter",
-			})
+			utils.WriteError(w, http.StatusBadRequest, errors.New("invalid id path parameter"))
 			return
 		}
 
 		exists, err := spyCatDeleter.CatExists(id)
 		if err != nil {
 			logger.Error("failed to check if cat exists", slog.Any("error", err))
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "failed to check if cat exists",
-			})
+			utils.WriteError(w, http.StatusInternalServerError, errors.New("failed to check if cat exists"))
 			return
 		}
 
 		if !exists {
 			logger.Error("cat not found", slog.Int64("id", id))
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "cat not found",
-			})
+			utils.WriteError(w, http.StatusNotFound, errors.New("cat not found"))
 			return
 		}
 
 		err = spyCatDeleter.DeleteCat(id)
 		if err != nil {
 			logger.Error("failed to delete spy cat", slog.Any("error", err))
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "failed to delete spy cat",
-			})
+			utils.WriteError(w, http.StatusInternalServerError, errors.New("failed to delete spy cat"))
 			return
 		}
 
 		logger.Info("spy cat deleted successfully", slog.Int64("id", id))
-
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

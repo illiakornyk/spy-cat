@@ -1,16 +1,15 @@
 package spycat
 
 import (
-	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"log/slog"
 
-	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
+	"github.com/illiakornyk/spy-cat/internal/utils"
 )
 
 type SpyCatUpdater interface {
@@ -22,106 +21,59 @@ type PatchRequest struct {
     Salary float64 `json:"salary" validate:"required,gt=0"`
 }
 
-type PatchResponse struct {
-    response.Response
-}
 
 func PatchHandler(logger *slog.Logger, spyCatUpdater SpyCatUpdater) http.HandlerFunc {
-    validate := validator.New()
+	validate := validator.New()
 
-    return func(w http.ResponseWriter, r *http.Request) {
-        const op = "handlers.spycat.patch"
+	return func(w http.ResponseWriter, r *http.Request) {
+		const op = "handlers.spycat.patch"
+		logger = logger.With(slog.String("op", op))
 
-        logger = logger.With(slog.String("op", op))
+		idStr := chi.URLParam(r, "id")
+		logger.Info("Extracted ID from URL", slog.String("idStr", idStr))
 
-        idStr := chi.URLParam(r, "id")
-        logger.Info("Extracted ID from URL", slog.String("idStr", idStr))
+		if idStr == "" {
+			utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("id path parameter is missing"))
+			return
+		}
 
-        if idStr == "" {
-            logger.Error("id path parameter is missing")
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil || id < 1 {
+			utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid id path parameter"))
+			return
+		}
 
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "id path parameter is missing",
-            })
-            return
-        }
+		exists, err := spyCatUpdater.CatExists(id)
+		if err != nil {
+			utils.WriteError(w, http.StatusInternalServerError, fmt.Errorf("failed to check if cat exists"))
+			return
+		}
 
-        id, err := strconv.ParseInt(idStr, 10, 64)
-        if err != nil || id < 1 {
-            logger.Error("invalid id path parameter", slog.Any("error", err))
+		if !exists {
+			utils.WriteError(w, http.StatusNotFound, fmt.Errorf("cat not found"))
+			return
+		}
 
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "invalid id path parameter",
-            })
-            return
-        }
+		var req PatchRequest
+		err = utils.ParseJSON(r, &req)
+		if err != nil {
+			utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("failed to decode request body"))
+			return
+		}
 
-        exists, err := spyCatUpdater.CatExists(id)
-        if err != nil {
-            logger.Error("failed to check if cat exists", slog.Any("error", err))
+		err = validate.Struct(req)
+		if err != nil {
+			utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("validation failed: %w", err))
+			return
+		}
 
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "failed to check if cat exists",
-            })
-            return
-        }
+		err = spyCatUpdater.UpdateCatSalary(id, req.Salary)
+		if err != nil {
+			utils.WriteError(w, http.StatusInternalServerError, fmt.Errorf("failed to update spy cat salary"))
+			return
+		}
 
-        if !exists {
-            logger.Error("cat not found", slog.Int64("id", id))
-
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "cat not found",
-            })
-            return
-        }
-
-
-        var req PatchRequest
-        err = json.NewDecoder(r.Body).Decode(&req)
-        if err != nil {
-            logger.Error("failed to decode request body", slog.Any("error", err))
-
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "failed to decode request body",
-            })
-            return
-        }
-
-        err = validate.Struct(req)
-        if err != nil {
-            logger.Error("validation failed", slog.Any("error", err))
-
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "validation failed",
-            })
-            return
-        }
-
-        err = spyCatUpdater.UpdateCatSalary(id, req.Salary)
-        if err != nil {
-            logger.Error("failed to update spy cat salary", slog.Any("error", err))
-
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "failed to update spy cat salary",
-            })
-            return
-        }
-
-        logger.Info("spy cat salary updated successfully", slog.Int64("id", id), slog.Float64("salary", req.Salary))
-
-		w.Header().Set("Content-Type", "application/json")
-
-        json.NewEncoder(w).Encode(PatchResponse{
-            Response: response.Response{
-                Status: response.StatusOK,
-            },
-        })
-    }
+		logger.Info("spy cat salary updated successfully", slog.Int64("id", id), slog.Float64("salary", req.Salary))
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

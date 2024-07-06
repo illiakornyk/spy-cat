@@ -1,10 +1,9 @@
 package spycat
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
+	"github.com/illiakornyk/spy-cat/internal/utils"
 
 	"log/slog"
 )
@@ -22,7 +21,6 @@ type SpyCat struct {
 }
 
 type GetAllResponse struct {
-    response.Response
     Cats []SpyCat `json:"cats"`
 }
 
@@ -35,24 +33,13 @@ func GetAllHandler(logger *slog.Logger, spyCatGetter SpyCatsGetter) http.Handler
 		cats, err := spyCatGetter.GetAllCats()
 		if err != nil {
 			logger.Error("failed to get all spy cats", slog.Any("error", err))
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "failed to get all spy cats",
-			})
+			utils.WriteError(w, http.StatusInternalServerError, err)
 			return
 		}
 
 		logger.Info("retrieved all spy cats successfully", slog.Int("count", len(cats)))
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(GetAllResponse{
-			Response: response.Response{
-				Status: response.StatusOK,
-			},
+		utils.WriteJSON(w, http.StatusOK, GetAllResponse{
 			Cats: cats,
 		})
 	}

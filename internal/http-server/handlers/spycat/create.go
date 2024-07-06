@@ -1,7 +1,6 @@
 package spycat
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -9,7 +8,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/illiakornyk/spy-cat/internal/breeds"
-	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
+	"github.com/illiakornyk/spy-cat/internal/utils"
 )
 
 type CreateRequest struct {
@@ -20,7 +19,6 @@ type CreateRequest struct {
 }
 
 type CreateResponse struct {
-	response.Response
 	ID     int64  `json:"id,omitempty"`
 }
 
@@ -32,88 +30,51 @@ type SpyCatCreator interface {
 func CreateHandler(logger *slog.Logger, spyCatCreator SpyCatCreator) http.HandlerFunc {
 	validate := validator.New()
 
-    return func(w http.ResponseWriter, r *http.Request) {
-        const op = "handlers.spycat.create"
+	return func(w http.ResponseWriter, r *http.Request) {
+		const op = "handlers.spycat.create"
 
-        logger = logger.With(slog.String("op", op))
+		logger = logger.With(slog.String("op", op))
 
-        var req CreateRequest
+		var req CreateRequest
 
-        err := json.NewDecoder(r.Body).Decode(&req)
-        if errors.Is(err, io.EOF) {
-            logger.Error("request body is empty")
+		err := utils.ParseJSON(r, &req)
+		if errors.Is(err, io.EOF) {
+			logger.Error("request body is empty")
+			utils.WriteError(w, http.StatusBadRequest, errors.New("empty request"))
+			return
+		}
+		if err != nil {
+			logger.Error("failed to decode request body", slog.Any("error", err))
+			utils.WriteError(w, http.StatusBadRequest, errors.New("failed to decode request"))
+			return
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "empty request",
-            })
-            return
-        }
-        if err != nil {
-            logger.Error("failed to decode request body", slog.Any("error", err))
+		logger.Info("request body decoded", slog.Any("req", req))
 
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "failed to decode request",
-            })
-            return
-        }
-
-        logger.Info("request body decoded", slog.Any("req", req))
-
-        err = validate.Struct(req)
-        if err != nil {
-            logger.Error("validation failed", slog.Any("error", err))
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "validation failed",
-            })
-            return
-        }
+		err = validate.Struct(req)
+		if err != nil {
+			logger.Error("validation failed", slog.Any("error", err))
+			utils.WriteError(w, http.StatusBadRequest, errors.New("validation failed"))
+			return
+		}
 
 		// Validate the breed
-        if !breeds.IsValidBreed(req.Breed) {
-            logger.Error("invalid breed", slog.String("breed", req.Breed))
+		if !breeds.IsValidBreed(req.Breed) {
+			logger.Error("invalid breed", slog.String("breed", req.Breed))
+			utils.WriteError(w, http.StatusBadRequest, errors.New("invalid breed"))
+			return
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "invalid breed",
-            })
-            return
-        }
+		id, err := spyCatCreator.CreateCat(req.Name, req.YearsOfExperience, req.Breed, req.Salary)
+		if err != nil {
+			logger.Error("failed to create spy cat", slog.Any("error", err))
+			utils.WriteError(w, http.StatusInternalServerError, errors.New("failed to create spy cat"))
+			return
+		}
 
-
-        id, err := spyCatCreator.CreateCat(req.Name, req.YearsOfExperience, req.Breed, req.Salary)
-        if err != nil {
-            logger.Error("failed to create spy cat", slog.Any("error", err))
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "failed to create spy cat",
-            })
-            return
-        }
-
-        logger.Info("spy cat created successfully", slog.Int64("id", id))
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-        json.NewEncoder(w).Encode(CreateResponse{
-            Response: response.Response{
-                Status: response.StatusOK,
-            },
-            ID: id,
-        })
-    }
+		logger.Info("spy cat created successfully", slog.Int64("id", id))
+		utils.WriteJSON(w, http.StatusCreated, CreateResponse{
+			ID: id,
+		})
 	}
+}
