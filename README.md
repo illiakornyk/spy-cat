@@ -60,7 +60,7 @@ The project is organized to separate concerns and allow easy extension:
 
 3. **Make requests** to the application:
    - Base URL: `http://localhost:8082/api/v1`
-   - Use the provided Postman collection to test the API.
+   - Use the provided [Postman collection](./Spy%20Cats.postman_collection.json) to test the API.
 
 ### Configuration
 
@@ -77,7 +77,7 @@ http_server:
 
 ### Endpoints
 
-Refer to the Postman collection in the repository for detailed information about available endpoints and their usage.
+Refer to the [Postman collection](./Spy%20Cats.postman_collection.json) in the repository for detailed information about available endpoints and their usage.
 
 ## Additional Improvements
 
