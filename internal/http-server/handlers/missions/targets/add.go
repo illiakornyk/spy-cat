@@ -1,16 +1,14 @@
 package targets
 
 import (
-	"encoding/json"
-	"errors"
-	"io"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
-	"github.com/illiakornyk/spy-cat/internal/lib/api/response"
+	"github.com/illiakornyk/spy-cat/internal/utils"
 )
 
 type AddTargetRequest struct {
@@ -29,60 +27,33 @@ func AddTargetHandler(logger *slog.Logger, targetAdder TargetAdder) http.Handler
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.missions.targets.add"
-
 		logger = logger.With(slog.String("op", op))
 
 		missionIDStr := chi.URLParam(r, "missionID")
 		missionID, err := strconv.ParseInt(missionIDStr, 10, 64)
 		if err != nil {
 			logger.Error("invalid mission id", slog.Any("error", err))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "invalid mission id",
-			})
+			utils.WriteError(w, http.StatusBadRequest, err)
 			return
 		}
 
 		exists, err := targetAdder.MissionExists(missionID)
 		if err != nil {
 			logger.Error("failed to check if mission exists", slog.Any("error", err))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "failed to check if mission exists",
-			})
+			utils.WriteError(w, http.StatusInternalServerError, err)
 			return
 		}
 		if !exists {
 			logger.Error("mission does not exist", slog.Int64("missionID", missionID))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "mission does not exist",
-			})
+			utils.WriteError(w, http.StatusNotFound, fmt.Errorf("mission with ID %d does not exist", missionID))
 			return
 		}
 
 		var req AddTargetRequest
-
-		err = json.NewDecoder(r.Body).Decode(&req)
-		if errors.Is(err, io.EOF) {
-			logger.Error("request body is empty")
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "empty request",
-			})
-			return
-		}
+		err = utils.ParseJSON(r, &req)
 		if err != nil {
 			logger.Error("failed to decode request body", slog.Any("error", err))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "failed to decode request",
-			})
+			utils.WriteError(w, http.StatusBadRequest, err)
 			return
 		}
 
@@ -91,30 +62,18 @@ func AddTargetHandler(logger *slog.Logger, targetAdder TargetAdder) http.Handler
 		err = validate.Struct(req)
 		if err != nil {
 			logger.Error("validation failed", slog.Any("error", err))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  "validation failed",
-			})
+			utils.WriteError(w, http.StatusBadRequest, err)
 			return
 		}
 
 		targetID, err := targetAdder.AddTarget(missionID, req.Name, req.Country, req.Notes)
 		if err != nil {
 			logger.Error("failed to add target", slog.Any("error", err))
-
-			json.NewEncoder(w).Encode(response.Response{
-				Status: response.StatusError,
-				Error:  err.Error(),
-			})
+			utils.WriteError(w, http.StatusInternalServerError, err)
 			return
 		}
 
 		logger.Info("target added successfully", slog.Int64("targetID", targetID))
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response.Response{
-			Status: response.StatusOK,
-		})
+		utils.WriteJSON(w, http.StatusCreated, map[string]int64{"targetID": targetID})
 	}
 }
