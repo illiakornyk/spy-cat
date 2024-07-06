@@ -1,103 +1,26 @@
 package main
 
 import (
-	"log"
 	"log/slog"
-	"net/http"
-	"os"
 	"time"
 
-	"github.com/go-chi/chi/middleware"
-	"github.com/go-chi/chi/v5"
 	"github.com/illiakornyk/spy-cat/internal/breeds"
 	"github.com/illiakornyk/spy-cat/internal/config"
-	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/missions"
-	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/missions/targets"
-	"github.com/illiakornyk/spy-cat/internal/http-server/handlers/spycat"
-	mwLogger "github.com/illiakornyk/spy-cat/internal/http-server/middleware/logger"
-	"github.com/illiakornyk/spy-cat/internal/storage/sqlite"
+	"github.com/illiakornyk/spy-cat/internal/http-server/router"
+	"github.com/illiakornyk/spy-cat/internal/logger"
+	"github.com/illiakornyk/spy-cat/internal/storage/initializer"
 )
-
-const (
-    envLocal = "local"
-    envDev   = "dev"
-    envProd  = "prod"
-)
-
 
 func main() {
 	cfg := config.MustLoad()
 
-	logger := setupLogger(cfg.Env)
-    logger = logger.With(slog.String("env", cfg.Env))
+	logger := logger.SetupLogger(cfg.Env)
+	logger = logger.With(slog.String("env", cfg.Env))
 
-    logger.Info("initializing server", slog.String("address", cfg.Address))
-    logger.Debug("logger debug mode enabled")
+	storage := initializer.InitializeStorage(cfg.StoragePath, logger)
+	breeds.StartBreedCache(24 * time.Hour)
 
+	r := router.SetupRouter(logger, storage)
 
-
-	storage, err := sqlite.New(cfg.StoragePath)
-    if err != nil {
-		log.Fatalf("Failed to open SQLite database: %v", err)
-	}
-
-	breeds.StartBreedCache(24*time.Hour)
-
-	router := chi.NewRouter()
-
-	router.Use(middleware.RequestID)
-	router.Use(middleware.Logger)
-	router.Use(mwLogger.New(logger))
-	router.Use(middleware.Recoverer)
-	router.Use(middleware.URLFormat)
-
-
-    router.Route("/api/v1/spy-cats", func(r chi.Router) {
-		r.Get("/", spycat.GetAllHandler(logger, storage))
-        r.Post("/", spycat.CreateHandler(logger, storage))
-        r.Delete("/{id}", spycat.DeleteHandler(logger, storage))
-        r.Patch("/{id}", spycat.PatchHandler(logger, storage))
-		r.Get("/{id}", spycat.GetOneHandler(logger, storage))
-    })
-
-	router.Route("/api/v1/missions", func(r chi.Router) {
-        r.Post("/", missions.CreateHandler(logger, storage))
-        r.Get("/", missions.GetAllHandler(logger, storage))
-        r.Get("/{id}", missions.GetOneHandler(logger, storage))
-		r.Patch("/{id}", missions.UpdateHandler(logger, storage))
-
-		r.Delete("/{id}", missions.DeleteHandler(logger, storage))
-
-		// Target routes
-        r.Route("/{missionID}/targets", func(r chi.Router) {
-			r.Patch("/{targetID}", targets.UpdateTargetHandler(logger, storage))
-			r.Delete("/{targetID}", targets.DeleteTargetHandler(logger, storage))
-			r.Post("/", targets.AddTargetHandler(logger, storage))
-		})
-
-	})
-
-
-	log.Printf("Starting server at %s...", cfg.HTTPServer.Address)
-
-	if err := http.ListenAndServe(cfg.HTTPServer.Address, router); err != nil {
-        log.Fatalf("Failed to start server: %v", err)
-    }
-}
-
-
-
-func setupLogger(env string) *slog.Logger {
-    var log *slog.Logger
-
-    switch env {
-    case envLocal:
-        log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-    case envDev:
-        log = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-    case envProd:
-        log = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-    }
-
-    return log
+	router.StartServer(cfg.HTTPServer.Address, r, logger)
 }
