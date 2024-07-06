@@ -27,30 +27,33 @@ type GetAllResponse struct {
 }
 
 func GetAllHandler(logger *slog.Logger, spyCatGetter SpyCatsGetter) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        const op = "handlers.spycat.get_all"
+	return func(w http.ResponseWriter, r *http.Request) {
+		const op = "handlers.spycat.get_all"
 
-        logger = logger.With(slog.String("op", op))
+		logger = logger.With(slog.String("op", op))
 
-        cats, err := spyCatGetter.GetAllCats()
-        if err != nil {
-            logger.Error("failed to get all spy cats", slog.Any("error", err))
+		cats, err := spyCatGetter.GetAllCats()
+		if err != nil {
+			logger.Error("failed to get all spy cats", slog.Any("error", err))
 
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "failed to get all spy cats",
-            })
-            return
-        }
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response.Response{
+				Status: response.StatusError,
+				Error:  "failed to get all spy cats",
+			})
+			return
+		}
 
-        logger.Info("retrieved all spy cats successfully", slog.Int("count", len(cats)))
+		logger.Info("retrieved all spy cats successfully", slog.Int("count", len(cats)))
+
 		w.Header().Set("Content-Type", "application/json")
-
-        json.NewEncoder(w).Encode(GetAllResponse{
-            Response: response.Response{
-                Status: response.StatusOK,
-            },
-            Cats: cats,
-        })
-    }
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(GetAllResponse{
+			Response: response.Response{
+				Status: response.StatusOK,
+			},
+			Cats: cats,
+		})
+	}
 }

@@ -23,80 +23,81 @@ type GetOneResponse struct {
 }
 
 func GetOneHandler(logger *slog.Logger, spyCatGetter SpyCatGetter) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        const op = "handlers.spycat.get_one"
+   return func(w http.ResponseWriter, r *http.Request) {
+		const op = "handlers.spycat.get_one"
 
-        logger = logger.With(slog.String("op", op))
+		logger = logger.With(slog.String("op", op))
 
-        idStr := chi.URLParam(r, "id")
-        logger.Info("Extracted ID from URL", slog.String("idStr", idStr))
+		idStr := chi.URLParam(r, "id")
+		logger.Info("Extracted ID from URL", slog.String("idStr", idStr))
 
-        if idStr == "" {
-            logger.Error("id path parameter is missing")
+		if idStr == "" {
+			logger.Error("id path parameter is missing")
 
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "id path parameter is missing",
-            })
-            return
-        }
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response.Response{
+				Status: response.StatusError,
+				Error:  "id path parameter is missing",
+			})
+			return
+		}
 
-        id, err := strconv.ParseInt(idStr, 10, 64)
-        if err != nil || id < 1 {
-            logger.Error("invalid id path parameter", slog.Any("error", err))
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil || id < 1 {
+			logger.Error("invalid id path parameter", slog.Any("error", err))
 
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "invalid id path parameter",
-            })
-            return
-        }
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response.Response{
+				Status: response.StatusError,
+				Error:  "invalid id path parameter",
+			})
+			return
+		}
 
 		exists, err := spyCatGetter.CatExists(id)
-        if err != nil {
-            logger.Error("failed to check if cat exists", slog.Any("error", err))
+		if err != nil {
+			logger.Error("failed to check if cat exists", slog.Any("error", err))
 
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "failed to check if cat exists",
-            })
-            return
-        }
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response.Response{
+				Status: response.StatusError,
+				Error:  "failed to check if cat exists",
+			})
+			return
+		}
 
 		if !exists {
-            logger.Error("cat not found", slog.Int64("id", id))
+			logger.Error("cat not found", slog.Int64("id", id))
 
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "cat not found",
-            })
-            return
-        }
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(response.Response{
+				Status: response.StatusError,
+				Error:  "cat not found",
+			})
+			return
+		}
 
-        cat, err := spyCatGetter.GetCatByID(id)
-        if err != nil {
-            logger.Error("failed to get spy cat by id", slog.Any("error", err))
+		cat, err := spyCatGetter.GetCatByID(id)
+		if err != nil {
+			logger.Error("failed to get spy cat by id", slog.Any("error", err))
 
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "failed to get spy cat by id",
-            })
-            return
-        }
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response.Response{
+				Status: response.StatusError,
+				Error:  "failed to get spy cat by id",
+			})
+			return
+		}
 
-        if cat == nil {
-            logger.Error("cat not found", slog.Int64("id", id))
-
-            json.NewEncoder(w).Encode(response.Response{
-                Status: response.StatusError,
-                Error:  "cat not found",
-            })
-            return
-        }
-
-        logger.Info("retrieved spy cat successfully", slog.Int64("id", id))
+		logger.Info("retrieved spy cat successfully", slog.Int64("id", id))
 
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(GetOneResponse{
 			Cat: cat,
 		})

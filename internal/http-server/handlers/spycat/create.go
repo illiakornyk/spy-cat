@@ -43,6 +43,8 @@ func CreateHandler(logger *slog.Logger, spyCatCreator SpyCatCreator) http.Handle
         if errors.Is(err, io.EOF) {
             logger.Error("request body is empty")
 
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
             json.NewEncoder(w).Encode(response.Response{
                 Status: response.StatusError,
                 Error:  "empty request",
@@ -52,6 +54,8 @@ func CreateHandler(logger *slog.Logger, spyCatCreator SpyCatCreator) http.Handle
         if err != nil {
             logger.Error("failed to decode request body", slog.Any("error", err))
 
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
             json.NewEncoder(w).Encode(response.Response{
                 Status: response.StatusError,
                 Error:  "failed to decode request",
@@ -65,6 +69,8 @@ func CreateHandler(logger *slog.Logger, spyCatCreator SpyCatCreator) http.Handle
         if err != nil {
             logger.Error("validation failed", slog.Any("error", err))
 
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
             json.NewEncoder(w).Encode(response.Response{
                 Status: response.StatusError,
                 Error:  "validation failed",
@@ -76,6 +82,8 @@ func CreateHandler(logger *slog.Logger, spyCatCreator SpyCatCreator) http.Handle
         if !breeds.IsValidBreed(req.Breed) {
             logger.Error("invalid breed", slog.String("breed", req.Breed))
 
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
             json.NewEncoder(w).Encode(response.Response{
                 Status: response.StatusError,
                 Error:  "invalid breed",
@@ -88,6 +96,8 @@ func CreateHandler(logger *slog.Logger, spyCatCreator SpyCatCreator) http.Handle
         if err != nil {
             logger.Error("failed to create spy cat", slog.Any("error", err))
 
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
             json.NewEncoder(w).Encode(response.Response{
                 Status: response.StatusError,
                 Error:  "failed to create spy cat",
@@ -98,6 +108,7 @@ func CreateHandler(logger *slog.Logger, spyCatCreator SpyCatCreator) http.Handle
         logger.Info("spy cat created successfully", slog.Int64("id", id))
 
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
         json.NewEncoder(w).Encode(CreateResponse{
             Response: response.Response{
                 Status: response.StatusOK,
