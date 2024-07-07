@@ -21,6 +21,5 @@ func WriteJSON(w http.ResponseWriter, status int, data any) error {
 }
 
 func WriteError(w http.ResponseWriter, status int, err error) {
-	fmt.Println("ERRORR IS HEREEE ", err)
 	WriteJSON(w, status, map[string]string{"error": err.Error()})
 }
