@@ -13,32 +13,43 @@ import (
 
 
 func (s *Storage) CreateMission(catID sql.NullInt64, targets []common.Target, complete bool) (int64, error) {
-	const op = "storage.sqlite.CreateMission"
+    const op = "storage.sqlite.CreateMission"
 
-	stmt, err := s.db.Prepare("INSERT INTO missions (cat_id, complete) VALUES (?, ?)")
-	if err != nil {
-		return 0, fmt.Errorf("%s: prepare statement: %w", op, err)
-	}
-	defer stmt.Close()
+    if catID.Valid {
+        // Check if the cat is already assigned to an active mission
+        isAssigned, err := s.isCatAssignedToActiveMission(catID.Int64)
+        if err != nil {
+            return 0, fmt.Errorf("%s: check if cat is assigned to active mission: %w", op, err)
+        }
+        if isAssigned {
+            return 0, fmt.Errorf("%s: cat is already assigned to an active mission", op)
+        }
+    }
 
-	res, err := stmt.Exec(catID, complete)
-	if err != nil {
-		return 0, fmt.Errorf("%s: execute statement: %w", op, err)
-	}
+    stmt, err := s.db.Prepare("INSERT INTO missions (cat_id, complete) VALUES (?, ?)")
+    if err != nil {
+        return 0, fmt.Errorf("%s: prepare statement: %w", op, err)
+    }
+    defer stmt.Close()
 
-	missionID, err := res.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("%s: failed to get last insert id: %w", op, err)
-	}
+    res, err := stmt.Exec(catID, complete)
+    if err != nil {
+        return 0, fmt.Errorf("%s: execute statement: %w", op, err)
+    }
 
-	for _, target := range targets {
-		_, err := s.AddTarget(missionID, target.Name, target.Country, target.Notes)
-		if err != nil {
-			return 0, fmt.Errorf("%s: failed to add target: %w", op, err)
-		}
-	}
+    missionID, err := res.LastInsertId()
+    if err != nil {
+        return 0, fmt.Errorf("%s: failed to get last insert id: %w", op, err)
+    }
 
-	return missionID, nil
+    for _, target := range targets {
+        _, err := s.AddTarget(missionID, target.Name, target.Country, target.Notes)
+        if err != nil {
+            return 0, fmt.Errorf("%s: failed to add target: %w", op, err)
+        }
+    }
+
+    return missionID, nil
 }
 
 
@@ -61,41 +72,51 @@ func (s *Storage) UpdateMissionCompleteStatus(id int64, complete bool) error {
 }
 
 func (s *Storage) AssignCatToMission(missionID, catID int64) error {
-	const op = "storage.sqlite.AssignCatToMission"
+    const op = "storage.sqlite.AssignCatToMission"
 
-	// Check if the mission exists
-	var exists bool
-	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM missions WHERE id = ?)", missionID).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("%s: query mission: %w", op, err)
-	}
-	if !exists {
-		return fmt.Errorf("%s: mission does not exist", op)
-	}
+    // Check if the mission exists
+    var exists bool
+    err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM missions WHERE id = ?)", missionID).Scan(&exists)
+    if err != nil {
+        return fmt.Errorf("%s: query mission: %w", op, err)
+    }
+    if !exists {
+        return fmt.Errorf("%s: mission does not exist", op)
+    }
 
-	// Check if the cat exists
-	err = s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM spy_cats WHERE id = ?)", catID).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("%s: query cat: %w", op, err)
-	}
-	if !exists {
-		return fmt.Errorf("%s: cat does not exist", op)
-	}
+    // Check if the cat exists
+    err = s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM spy_cats WHERE id = ?)", catID).Scan(&exists)
+    if err != nil {
+        return fmt.Errorf("%s: query cat: %w", op, err)
+    }
+    if !exists {
+        return fmt.Errorf("%s: cat does not exist", op)
+    }
 
-	// Assign the cat to the mission
-	stmt, err := s.db.Prepare("UPDATE missions SET cat_id = ? WHERE id = ?")
-	if err != nil {
-		return fmt.Errorf("%s: prepare statement: %w", op, err)
-	}
-	defer stmt.Close()
+    // Check if the cat is already assigned to an active mission
+    isAssigned, err := s.isCatAssignedToActiveMission(catID)
+    if err != nil {
+        return fmt.Errorf("%s: check if cat is assigned to active mission: %w", op, err)
+    }
+    if isAssigned {
+        return fmt.Errorf("%s: cat is already assigned to an active mission", op)
+    }
 
-	_, err = stmt.Exec(catID, missionID)
-	if err != nil {
-		return fmt.Errorf("%s: execute statement: %w", op, err)
-	}
+    // Assign the cat to the mission
+    stmt, err := s.db.Prepare("UPDATE missions SET cat_id = ? WHERE id = ?")
+    if err != nil {
+        return fmt.Errorf("%s: prepare statement: %w", op, err)
+    }
+    defer stmt.Close()
 
-	return nil
+    _, err = stmt.Exec(catID, missionID)
+    if err != nil {
+        return fmt.Errorf("%s: execute statement: %w", op, err)
+    }
+
+    return nil
 }
+
 
 func (s *Storage) MissionExists(id int64) (bool, error) {
 	const op = "storage.sqlite.MissionExists"
@@ -232,4 +253,18 @@ const op = "storage.sqlite.GetMissionWithTargets"
 	}
 
 	return &mission, nil
+}
+
+
+
+func (s *Storage) isCatAssignedToActiveMission(catID int64) (bool, error) {
+    const op = "storage.sqlite.isCatAssignedToActiveMission"
+
+    var exists bool
+    err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM missions WHERE cat_id = ? AND complete = 0)", catID).Scan(&exists)
+    if err != nil {
+        return false, fmt.Errorf("%s: query active mission: %w", op, err)
+    }
+
+    return exists, nil
 }
