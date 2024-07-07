@@ -26,6 +26,10 @@ func (s *Storage) CreateMission(catID sql.NullInt64, targets []common.Target, co
         }
     }
 
+    if len(targets) < 1 || len(targets) > 3 {
+        return 0, fmt.Errorf("%s: the number of targets must be between 1 and 3", op)
+    }
+
     stmt, err := s.db.Prepare("INSERT INTO missions (cat_id, complete) VALUES (?, ?)")
     if err != nil {
         return 0, fmt.Errorf("%s: prepare statement: %w", op, err)
@@ -267,4 +271,17 @@ func (s *Storage) isCatAssignedToActiveMission(catID int64) (bool, error) {
     }
 
     return exists, nil
+}
+
+
+func (s *Storage) getTargetCountForMission(missionID int64) (int, error) {
+    const op = "storage.sqlite.getTargetCountForMission"
+
+    var count int
+    err := s.db.QueryRow("SELECT COUNT(*) FROM targets WHERE mission_id = ?", missionID).Scan(&count)
+    if err != nil {
+        return 0, fmt.Errorf("%s: query target count: %w", op, err)
+    }
+
+    return count, nil
 }
