@@ -61,6 +61,17 @@ func (s *Storage) CreateMission(catID sql.NullInt64, targets []common.Target, co
 func (s *Storage) UpdateMissionCompleteStatus(id int64, complete bool) error {
 	const op = "storage.sqlite.UpdateMissionCompleteStatus"
 
+	if complete {
+		// Check if all targets are completed before marking the mission as complete
+		allComplete, err := s.areAllTargetsComplete(id)
+		if err != nil {
+			return fmt.Errorf("%s: check if all targets are complete: %w", op, err)
+		}
+		if !allComplete {
+			return fmt.Errorf("%s: cannot complete mission until all targets are completed", op)
+		}
+	}
+
 	stmt, err := s.db.Prepare("UPDATE missions SET complete = ? WHERE id = ?")
 	if err != nil {
 		return fmt.Errorf("%s: prepare statement: %w", op, err)
@@ -284,4 +295,17 @@ func (s *Storage) getTargetCountForMission(missionID int64) (int, error) {
     }
 
     return count, nil
+}
+
+
+func (s *Storage) areAllTargetsComplete(missionID int64) (bool, error) {
+	const op = "storage.sqlite.areAllTargetsComplete"
+
+	var incompleteCount int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM targets WHERE mission_id = ? AND complete = 0", missionID).Scan(&incompleteCount)
+	if err != nil {
+		return false, fmt.Errorf("%s: query incomplete targets: %w", op, err)
+	}
+
+	return incompleteCount == 0, nil
 }

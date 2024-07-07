@@ -83,6 +83,13 @@ func updateCompleteStatus(w http.ResponseWriter, r *http.Request, id int64, comp
 	err := missionUpdater.UpdateMissionCompleteStatus(id, complete)
 	if err != nil {
 		logger.Error("failed to update mission complete status", slog.Any("error", err))
+
+		// Check if the error is due to incomplete targets
+		if err.Error() == "storage.sqlite.UpdateMissionCompleteStatus: cannot complete mission until all targets are completed" {
+			utils.WriteError(w, http.StatusConflict, fmt.Errorf("cannot complete mission until all targets are completed"))
+			return
+		}
+
 		utils.WriteError(w, http.StatusInternalServerError, fmt.Errorf("failed to update mission complete status"))
 		return
 	}
@@ -90,6 +97,7 @@ func updateCompleteStatus(w http.ResponseWriter, r *http.Request, id int64, comp
 	logger.Info("mission complete status updated successfully", slog.Int64("id", id), slog.Bool("complete", complete))
 	w.WriteHeader(http.StatusNoContent)
 }
+
 
 func assignCat(w http.ResponseWriter, r *http.Request, id int64, catID int64, logger *slog.Logger, missionUpdater MissionUpdater, validate *validator.Validate) {
 	const op = "handlers.missions.assignCat"
