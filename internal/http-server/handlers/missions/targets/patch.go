@@ -92,6 +92,12 @@ func UpdateTargetHandler(logger *slog.Logger, targetUpdater TargetUpdater) http.
 			return
 		}
 
+		if req.Notes == nil && req.Complete == nil {
+			logger.Error("no valid update fields provided")
+			utils.WriteError(w, http.StatusBadRequest, errors.New("no valid update fields provided"))
+			return
+		}
+
 		if req.Notes != nil && req.Complete != nil {
 			logger.Error("cannot update both notes and complete status at the same time")
 			utils.WriteError(w, http.StatusBadRequest, errors.New("cannot update both notes and complete status at the same time"))
