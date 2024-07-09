@@ -147,48 +147,87 @@ func (s *Storage) MissionExists(id int64) (bool, error) {
 
 
 
+// DeleteMission always deletes the mission, regardless of whether it is assigned to a cat.
 func (s *Storage) DeleteMission(missionID int64) error {
-	const op = "storage.sqlite.DeleteMission"
+    const op = "storage.sqlite.DeleteMission"
 
-	var catID sql.NullInt64
-	err := s.db.QueryRow("SELECT cat_id FROM missions WHERE id = ?", missionID).Scan(&catID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("%s: mission not found", op)
-		}
-		return fmt.Errorf("%s: query mission: %w", op, err)
-	}
-	if catID.Valid {
-		return fmt.Errorf("%s: cannot delete a mission assigned to a cat", op)
-	}
+    // Begin transaction
+    tx, err := s.db.Begin()
+    if err != nil {
+        return fmt.Errorf("%s: begin transaction: %w", op, err)
+    }
 
-	// Begin transaction
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("%s: begin transaction: %w", op, err)
-	}
+    // Use the internal function to perform the deletion within the transaction
+    err = s.deleteMissionTx(tx, missionID, true)
+    if err != nil {
+        tx.Rollback()
+        return fmt.Errorf("%s: %w", op, err)
+    }
 
-	// Delete targets associated with the mission
-	_, err = tx.Exec("DELETE FROM targets WHERE mission_id = ?", missionID)
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("%s: delete targets: %w", op, err)
-	}
+    // Commit transaction
+    if err := tx.Commit(); err != nil {
+        return fmt.Errorf("%s: commit transaction: %w", op, err)
+    }
 
-	// Delete the mission
-	_, err = tx.Exec("DELETE FROM missions WHERE id = ?", missionID)
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("%s: delete mission: %w", op, err)
-	}
-
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("%s: commit transaction: %w", op, err)
-	}
-
-	return nil
+    return nil
 }
+
+// DeleteUnassignedMission only deletes the mission if it is not assigned to a cat.
+func (s *Storage) DeleteUnassignedMission(missionID int64) error {
+    const op = "storage.sqlite.DeleteUnassignedMission"
+
+    // Begin transaction
+    tx, err := s.db.Begin()
+    if err != nil {
+        return fmt.Errorf("%s: begin transaction: %w", op, err)
+    }
+
+    // Use the internal function to perform the deletion within the transaction
+    err = s.deleteMissionTx(tx, missionID, false)
+    if err != nil {
+        tx.Rollback()
+        return fmt.Errorf("%s: %w", op, err)
+    }
+
+    // Commit transaction
+    if err := tx.Commit(); err != nil {
+        return fmt.Errorf("%s: commit transaction: %w", op, err)
+    }
+
+    return nil
+}
+
+// Internal function for deleting a mission within a transaction context
+func (s *Storage) deleteMissionTx(tx *sql.Tx, missionID int64, ignoreAssigned bool) error {
+    const op = "storage.sqlite.DeleteMissionTx"
+
+    var catID sql.NullInt64
+    err := tx.QueryRow("SELECT cat_id FROM missions WHERE id = ?", missionID).Scan(&catID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return fmt.Errorf("%s: mission not found", op)
+        }
+        return fmt.Errorf("%s: query mission: %w", op, err)
+    }
+    if !ignoreAssigned && catID.Valid {
+        return fmt.Errorf("%s: cannot delete a mission assigned to a cat", op)
+    }
+
+    // Delete targets associated with the mission
+    _, err = tx.Exec("DELETE FROM targets WHERE mission_id = ?", missionID)
+    if err != nil {
+        return fmt.Errorf("%s: delete targets: %w", op, err)
+    }
+
+    // Delete the mission
+    _, err = tx.Exec("DELETE FROM missions WHERE id = ?", missionID)
+    if err != nil {
+        return fmt.Errorf("%s: delete mission: %w", op, err)
+    }
+
+    return nil
+}
+
 
 
 
