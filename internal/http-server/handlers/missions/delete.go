@@ -11,7 +11,7 @@ import (
 )
 
 type MissionDeleter interface {
-	DeleteUnassignedMission(id int64) error
+	DeleteUnassignedMission(missionIDs []int64) error
 	MissionExists(missionID int64) (bool, error)
 }
 
@@ -40,7 +40,7 @@ func DeleteHandler(logger *slog.Logger, missionDeleter MissionDeleter) http.Hand
 			return
 		}
 
-		err = missionDeleter.DeleteUnassignedMission(id)
+		err = missionDeleter.DeleteUnassignedMission([]int64{id})
 		if err != nil {
 			logger.Error("failed to delete mission", slog.Any("error", err))
 			utils.WriteError(w, http.StatusInternalServerError, errors.New("failed to delete mission"))

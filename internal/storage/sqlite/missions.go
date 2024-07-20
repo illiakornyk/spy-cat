@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/illiakornyk/spy-cat/internal/common"
 )
@@ -148,7 +149,7 @@ func (s *Storage) MissionExists(id int64) (bool, error) {
 
 
 // DeleteMission always deletes the mission, regardless of whether it is assigned to a cat.
-func (s *Storage) DeleteMission(missionID int64) error {
+func (s *Storage) DeleteMission(missionIDs []int64) error {
     const op = "storage.sqlite.DeleteMission"
 
     // Begin transaction
@@ -158,7 +159,7 @@ func (s *Storage) DeleteMission(missionID int64) error {
     }
 
     // Use the internal function to perform the deletion within the transaction
-    err = s.deleteMissionTx(tx, missionID, true)
+    err = s.deleteMissionTx(tx, missionIDs, true)
     if err != nil {
         tx.Rollback()
         return fmt.Errorf("%s: %w", op, err)
@@ -173,7 +174,7 @@ func (s *Storage) DeleteMission(missionID int64) error {
 }
 
 // DeleteUnassignedMission only deletes the mission if it is not assigned to a cat.
-func (s *Storage) DeleteUnassignedMission(missionID int64) error {
+func (s *Storage) DeleteUnassignedMission(missionIDs []int64) error {
     const op = "storage.sqlite.DeleteUnassignedMission"
 
     // Begin transaction
@@ -183,7 +184,7 @@ func (s *Storage) DeleteUnassignedMission(missionID int64) error {
     }
 
     // Use the internal function to perform the deletion within the transaction
-    err = s.deleteMissionTx(tx, missionID, false)
+    err = s.deleteMissionTx(tx, missionIDs, false)
     if err != nil {
         tx.Rollback()
         return fmt.Errorf("%s: %w", op, err)
@@ -198,35 +199,76 @@ func (s *Storage) DeleteUnassignedMission(missionID int64) error {
 }
 
 // Internal function for deleting a mission within a transaction context
-func (s *Storage) deleteMissionTx(tx *sql.Tx, missionID int64, ignoreAssigned bool) error {
+func (s *Storage) deleteMissionTx(tx *sql.Tx, missionIDs []int64, ignoreAssigned bool) error {
     const op = "storage.sqlite.DeleteMissionTx"
 
-    var catID sql.NullInt64
-    err := tx.QueryRow("SELECT cat_id FROM missions WHERE id = ?", missionID).Scan(&catID)
-    if err != nil {
-        if err == sql.ErrNoRows {
-            return fmt.Errorf("%s: mission not found", op)
-        }
-        return fmt.Errorf("%s: query mission: %w", op, err)
-    }
-    if !ignoreAssigned && catID.Valid {
-        return fmt.Errorf("%s: cannot delete a mission assigned to a cat", op)
+    if len(missionIDs) == 0 {
+        return nil
     }
 
-    // Delete targets associated with the mission
-    _, err = tx.Exec("DELETE FROM targets WHERE mission_id = ?", missionID)
+    // Constructing the SQL query with IN clause for mission IDs
+    placeholders := make([]string, len(missionIDs))
+    for i := range placeholders {
+        placeholders[i] = "?"
+    }
+    placeholderString := strings.Join(placeholders, ", ")
+
+    // Query to select cat_id for each mission
+    query := fmt.Sprintf("SELECT id, cat_id FROM missions WHERE id IN (%s)", placeholderString)
+    rows, err := tx.Query(query, int64SliceToInterfaceSlice(missionIDs)...)
+    if err != nil {
+        return fmt.Errorf("%s: query mission: %w", op, err)
+    }
+    defer rows.Close()
+
+    var validMissionIDs []int64
+    for rows.Next() {
+        var id int64
+        var catID sql.NullInt64
+        err := rows.Scan(&id, &catID)
+        if err != nil {
+            return fmt.Errorf("%s: scan mission: %w", op, err)
+        }
+        if !ignoreAssigned && catID.Valid {
+            return fmt.Errorf("%s: cannot delete a mission assigned to a cat", op)
+        }
+        validMissionIDs = append(validMissionIDs, id)
+    }
+
+    if err = rows.Err(); err != nil {
+        return fmt.Errorf("%s: iterate rows: %w", op, err)
+    }
+
+    if len(validMissionIDs) == 0 {
+        return nil
+    }
+
+    // Delete targets associated with the missions
+    deleteTargetsQuery := fmt.Sprintf("DELETE FROM targets WHERE mission_id IN (%s)", placeholderString)
+    _, err = tx.Exec(deleteTargetsQuery, int64SliceToInterfaceSlice(validMissionIDs)...)
     if err != nil {
         return fmt.Errorf("%s: delete targets: %w", op, err)
     }
 
-    // Delete the mission
-    _, err = tx.Exec("DELETE FROM missions WHERE id = ?", missionID)
+    // Delete the missions
+    deleteMissionsQuery := fmt.Sprintf("DELETE FROM missions WHERE id IN (%s)", placeholderString)
+    _, err = tx.Exec(deleteMissionsQuery, int64SliceToInterfaceSlice(validMissionIDs)...)
     if err != nil {
-        return fmt.Errorf("%s: delete mission: %w", op, err)
+        return fmt.Errorf("%s: delete missions: %w", op, err)
     }
 
     return nil
 }
+
+// Helper function to convert []int64 to []interface{} for variadic parameters in Exec and Query methods
+func int64SliceToInterfaceSlice(slice []int64) []interface{} {
+    ifaceSlice := make([]interface{}, len(slice))
+    for i, v := range slice {
+        ifaceSlice[i] = v
+    }
+    return ifaceSlice
+}
+
 
 
 

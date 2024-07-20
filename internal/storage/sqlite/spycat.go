@@ -57,13 +57,13 @@ func (s *Storage) DeleteCat(id int64) error {
         return fmt.Errorf("%s: get missions by cat ID: %w", op, err)
     }
 
+
+
     // Delete each mission within the same transaction
-    for _, missionID := range missions {
-        err = s.deleteMissionTx(tx, missionID, true)
-        if err != nil {
-            tx.Rollback()
-            return fmt.Errorf("%s: delete mission: %w", op, err)
-        }
+    err = s.deleteMissionTx(tx, missions, true)
+    if err != nil {
+        tx.Rollback()
+        return fmt.Errorf("%s: delete mission: %w", op, err)
     }
 
     // Delete the cat
